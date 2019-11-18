@@ -1,11 +1,331 @@
 <plugin>
-    <b>This plugin will rock</b>
 
-    <script>
-        console.log('I am mounted to the page');
 
-        this.onopen = () => console.log('I am opened');
+  <div id="bottom" class="shy left-border right-border radar-wrapper">
+    <div id="navigator">
+      <div id="comment-box">
+         <div id="comment-box-text"></div>
+      </div>
 
-        this.onclose = () => console.log('I am being closed');
-    </script>
+      <div id="reset-button">
+        &#8634; Reset
+      </div>
+    </div>
+  </div>
+
+
+	<script>
+
+
+	import store from '@windy/store'
+	import map from '@windy/map'
+  // import picker from '@windy/picker'
+  // import utils from '@windy/utils'
+  import pluginDataLoader from '@windy/pluginDataLoader'
+
+
+	const getPosition = () => {
+	    return new Promise((resolve, reject) => {
+	        const onSuccess = (position) => {
+	            const lat = position.coords.latitude;
+	            const lng = position.coords.longitude;
+	            let pos = [lat,lng];
+	            resolve(pos)
+	        };
+	        const onError = () => {
+	            console.log('I can\'t get your location info.');
+	            reject();
+	        };
+	        navigator.geolocation.getCurrentPosition(onSuccess, onError);
+	    });
+	};
+
+
+
+	// Create the pulsating ring animation div
+	let pointIcon = L.divIcon({
+			className: 'css-icon',
+			html: '<div class="gps_ring"></div>',
+			iconSize: [12,12],
+			iconAnchor: [13,13]
+	});
+	let locationIcon = L.divIcon({
+			className: 'css-icon',
+			html: '<div style="border: 5px solid blue;" class="gps_ring"></div>',
+			iconSize: [12,12],
+			iconAnchor: [13,13]
+	});
+
+  let timestamps = [];
+	let latlongs = [];
+	let willRain;
+	let polyline;
+	let U;
+	let V;
+	let mTraj;
+	let mGeo;
+	let rainTime_f;
+
+	// wrap everything in an asyncronous geolocator call
+	getPosition().then((position) => {
+
+
+			// sample user location
+			const loc_x = position[1];
+			const loc_y = position[0];
+
+      store.set('overlay','radar')
+            map.setView([loc_y, loc_x], 9 );
+
+      SetText('To begin, first move the slider back in time. Then click on a weather feature.')
+
+
+			let location_marker = L.marker([loc_y, loc_x], {icon: locationIcon}).addTo(map);
+			document.getElementsByClassName('gps_ring');
+
+			const options  = {
+					key: 'psfAt10AZ7JJCoM3kz0U1ytDhTiLNJN3',
+					plugin: 'windy-plugin-maxtemp'
+			}
+			const load = pluginDataLoader( options )
+			const dataOptions = {
+					model: store.get('product'),
+					lat: loc_y,
+					lon: loc_x
+			}
+			load('airData', dataOptions ).then( ({data}) => {
+				  let current_timestamp = store.get('timestamp');
+          let tidx = getDataTimeStamp(current_timestamp, data.data.hours);
+          // console.log('Using 700hPa winds at timestamp: ',new Date(data.data.hours[tidx]));
+          U = data.data['wind_u-700h'][tidx];
+          V = data.data['wind_v-700h'][tidx];
+			});
+
+
+
+      // This is the main code, triggered by the first click event
+		  map.on('click', e => {
+
+						let resetB = document.getElementById('reset-button')
+			      resetB.addEventListener("click", () => {
+								timestamps = [];
+								latlongs = [];
+								map.removeLayer(polyline);
+								let elements = document.getElementsByClassName('css-icon');
+								while(elements.length > 0){
+										elements[0].parentNode.removeChild(elements[0]);
+								}
+			      });
+
+
+
+
+
+					  let pulsing_marker = L.marker([e.latlng.lat, e.latlng.lng], {icon: pointIcon}).addTo(map);
+						let timestamp = getTimestamp();
+            console.log(timestamp - timestamps[timestamps.length-1] )
+            if (Math.abs(timestamp - timestamps[timestamps.length-1]) < 120000) {
+                SetText("Did you change the time?");
+            } else if (timestamp.length==1) {
+                SetText("Move forward in time and click on the same feature. Doing this repeatedly should, in general, improve the accuracy. ");
+            } else {
+
+    						timestamps.push(timestamp);
+
+    						latlongs.push([e.latlng.lat, e.latlng.lng]);
+    						let zip = [];
+    						for (let i = 0; i < timestamps.length; i++) {
+    								zip.push([timestamps[i], latlongs[i]]);
+    						}
+    						zip.sort(function (a, b) { return a[0] - b[0]; });
+    						for (let i = 0; i < zip.length; i++) {
+    								timestamps[i] = zip[i][0];
+    								latlongs[i] = zip[i][1];
+    						}
+
+    		        let lats = [];
+    						let lons = [];
+    						for (let i=0;i<latlongs.length;i++) {
+    		            lats.push(latlongs[i][0]);
+    				        lons.push(latlongs[i][1]);
+    						}
+
+     					  if (lons.length >= 2) {
+    							  console.log("Using manual trajectories...");
+    								let [fitlons, fitlats] = linearFit(lons, lats);
+    								let dt = Math.max(...timestamps) - Math.min(...timestamps);
+    								let fitlatlons = fitlons.map((e, i) => [fitlats[i], e]);
+
+
+    								if (fitlatlons.length>2) 	map.removeLayer(polyline);
+    								polyline = new L.polyline(fitlatlons, {color: 'red'}).addTo(map);
+
+    		 						// // Can't quite get the arrow heads positioned right, will come back to this.
+    		            // drawArrowHead(fitlatlons);
+
+    								// fitlons_m contains the location of the user as its last point
+    								lats.push(loc_y);
+    				        lons.push(loc_x);
+    								let [fitlons_m, fitlats_m] = linearFit(lons, lats);
+
+    								/* find the slope of the best fit line including the users location
+    								and also without. If the difference in slope, m, is smaller than a threshold
+    								value, the user is assumed to be in the rain's path. */
+    								mTraj = (fitlats[fitlons.length-1]-fitlats[0])/(fitlons[fitlons.length-1]-fitlons[0]);
+    				        mGeo = (fitlats_m[fitlons.length-1]-fitlats_m[0])/(fitlons_m[fitlons.length-1]-fitlons_m[0]);
+
+    								let lidx = fitlons.length-1;
+    								let Velocity = 1/dt* Math.sqrt((fitlats[lidx]-fitlats[0])**2 + (fitlons[lidx]-fitlons[0])**2 );
+    								let dtNew = Math.sqrt( (loc_y-fitlats[lidx])**2 + (loc_x-fitlons[lidx])**2 ) / Velocity;
+
+    								let rainTime = Math.max(...timestamps) + dtNew;
+    								rainTime_f = new Date(rainTime);
+
+    						} else if (lons.length == 1) {
+    							  console.log("Using 700mb winds...");
+    							  mTraj = Math.atan((loc_y - lats[0])/(loc_x - lons[0]))
+    								mGeo = Math.atan(V/U);
+
+    								let Velocity =  Math.sqrt(U**2 + V**2);
+    								let d_metres = haversine(loc_y, loc_x, lats[0], lons[0]);
+    								let dtNew = 1000*d_metres/Velocity;
+
+    								let rainTime = Math.max(...timestamps) + dtNew;
+    								rainTime_f = new Date(rainTime);
+    						};
+
+    						if (Math.abs(mTraj - mGeo) < 0.3) willRain = true;
+
+    						if (willRain) {
+    								console.log('Rain ETA: ', rainTime_f);
+                    let rainTimeSlice = rainTime_f.toString().slice(16,21);
+    								SetText(`Rain ETA: ${rainTimeSlice}` );
+    						} else {
+    								console.log('The current trajectory doesn\'t affect your location.');
+    								SetText('The current trajectory doesn\'t affect your location. Move the time slider and add more points to increase the accuracy.');
+    						};
+            }; // timestamp ifelse
+		  });  //map.onclick event
+	});  // getPosition wrapper
+
+
+
+	/* This functon computes the least squares fit based on the input points. It's borrowed, apologies
+	to the author as I can't remember exactly where it came from.  */
+	const linearFit = (values_x, values_y) => {
+	   let sum_x = 0; let sum_y = 0;
+	   let sum_xy = 0; let sum_xx = 0;
+	   let count = 0; let x = 0;
+	   let y = 0; let values_length = values_x.length
+
+	   if (values_length != values_y.length) { throw new Error('The parameters values_x and values_y need to have same size!') };
+	   if (values_length === 0) { return [ [], [] ]  };
+
+	   for (let v = 0; v<values_length; v++) {
+	       x = values_x[v];
+	       y = values_y[v];
+	       sum_x += x;
+	       sum_y += y;
+	       sum_xx += x*x;
+	       sum_xy += x*y;
+	       count++;
+	   }
+
+	   let m = (count*sum_xy - sum_x*sum_y) / (count*sum_xx - sum_x*sum_x);
+	   let b = (sum_y/count) - (m*sum_x)/count;
+	   let result_values_x = [];
+	   let result_values_y = [];
+
+	   for (let v=0;v<values_length;v++) {
+	       x = values_x[v];
+	       y = x * m + b;
+	       result_values_x.push(x);
+	       result_values_y.push(y);
+	   }
+
+	   return [result_values_x, result_values_y];
+	}
+
+
+	// This one's a little hacky, but windy's API only seems to
+	// serve the model timestamps, not the radar. So I hunted through the DOM
+	// for the right div, and grabbed the HTML. The plugin will break if this changes its name.
+  const getTimestamp = () => {
+			let timestamp;
+			let secondsElapsed;
+
+			if (document.querySelectorAll("div.timecode.main-timecode").length < 3) {
+					timestamp = store.get('timestamp');
+			} else {
+          let radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[2].innerText;
+					let r = /\d+/g;
+					let regextimes = [];
+					let m;
+					while ((m = r.exec(radarTimeStamp)) != null) {
+					  regextimes.push(m[0]);
+					}
+					if (regextimes.length == 4) {
+						  secondsElapsed = 1000 * (60*60*regextimes[2] + 60*regextimes[3]);
+					} else if (regextimes.length == 3) {
+						  secondsElapsed = 1000 * 60*regextimes[2];
+					}
+          timestamp = Date.now() - secondsElapsed;
+			}
+
+			return timestamp;
+	}
+
+
+  const drawArrowHead = (fitlatlons) => {
+
+			let fidx = fitlatlons.length-1;
+      let theta = Math.atan2(fitlatlons[fidx][0]-fitlatlons[0][0], fitlatlons[fidx][1]-fitlatlons[0][1]) * (180/Math.PI);
+			theta = (theta<0) ? theta*-1 : 360-theta;
+			let arrowIcon = L.divIcon({
+				// &#10148;
+					className: 'css-icon',
+					html: '<div style="transform: rotate('+theta+'deg);  transform-origin: bottom center;" class="arrow-icon">.</div>',
+					iconAnchor: [0, 0]
+			});
+			L.marker([fitlatlons[fidx][0], fitlatlons[fidx][1]], {icon: arrowIcon}).addTo(map);
+	};
+
+	const SetText = text => {
+		  document.getElementById('comment-box-text').style.opacity = '0';
+			window.setTimeout(function () {
+				  document.getElementById('comment-box-text').innerText = text;
+				  document.getElementById('comment-box-text').style.opacity = '1';
+			}, 500);
+  }
+
+
+	const getDataTimeStamp = (current_timestamp, h) => {
+			let i=0;
+			let minDiff = 99999999999;
+			let tidx;
+			for (i in h) {
+					let m=Math.abs(current_timestamp-h[i])
+					if (m<minDiff) {
+							minDiff=m
+							tidx=i
+					};
+			};
+			return tidx;
+	};
+
+
+	function haversine(lat1, lon1, lat2, lon2){  // generally used geo measurement function
+	    var R = 6378.137; // Radius of earth in KM
+	    var dLat = lat2 * Math.PI / 180 - lat1 * Math.PI / 180;
+	    var dLon = lon2 * Math.PI / 180 - lon1 * Math.PI / 180;
+	    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+	    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+	    Math.sin(dLon/2) * Math.sin(dLon/2);
+	    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+	    var d = R * c;
+	    return d * 1000; // meters
+	}
+
+
+	</script>
 </plugin>
