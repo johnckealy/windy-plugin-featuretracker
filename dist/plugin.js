@@ -37,7 +37,7 @@ W.loadPlugin(
 /* HTML */
 '<div id="bottom" class="shy left-border right-border radar-wrapper"> <div id="navigator"> <div id="comment-box"> <div id="comment-box-text"></div> </div> <div id="reset-button"> &#8634; Reset </div> </div> </div>',
 /* CSS */
-'#reset-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;width:60px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}#reset-button:hover{color:white}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 270px);pointer-events:auto}#comment-box{position:relative;width:220px;height:250px;border-radius:12px;background-color:rgba(0,0,0,0.5);border:5px solid black}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}',
+'.nav-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;width:60px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}.nav-button:hover{color:white}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 270px);pointer-events:auto}#comment-box{position:relative;width:220px;height:250px;border-radius:12px;background-color:rgba(0,0,0,0.5);border:5px solid black}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}',
 /* Constructor */
 function () {
   var pluginDataLoader = W.require('pluginDataLoader');
@@ -89,7 +89,7 @@ function () {
     var loc_x = position[1];
     var loc_y = position[0];
     store.set('overlay', 'radar');
-    map.setView([loc_y, loc_x], 9);
+    map.setView([loc_y, loc_x], 10);
     SetText('To begin, first move the slider back in time. Then click on a weather feature.');
     var location_marker = L.marker([loc_y, loc_x], {
       icon: locationIcon

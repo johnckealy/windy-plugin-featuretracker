@@ -69,13 +69,12 @@
 	// wrap everything in an asyncronous geolocator call
 	getPosition().then((position) => {
 
-
 			// sample user location
 			const loc_x = position[1];
 			const loc_y = position[0];
 
       store.set('overlay','radar')
-            map.setView([loc_y, loc_x], 9 );
+            map.setView([loc_y, loc_x], 10 );
 
       SetText('To begin, first move the slider back in time. Then click on a weather feature.')
 
