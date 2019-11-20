@@ -3,11 +3,15 @@
 
   <div id="bottom" class="shy left-border right-border radar-wrapper">
     <div id="navigator">
+      <div id="ft-title">
+        Feature Tracking
+      </div>
+
       <div id="comment-box">
          <div id="comment-box-text"></div>
       </div>
 
-      <div id="reset-button">
+      <div id="reset-button" class="nav-button">
         &#8634; Reset
       </div>
     </div>
@@ -19,7 +23,7 @@
 
 	import store from '@windy/store'
 	import map from '@windy/map'
-  // import picker from '@windy/picker'
+  import picker from '@windy/picker'
   // import utils from '@windy/utils'
   import pluginDataLoader from '@windy/pluginDataLoader'
 
@@ -56,15 +60,18 @@
 			iconAnchor: [13,13]
 	});
 
-  let timestamps = [];
-	let latlongs = [];
-	let willRain;
-	let polyline;
-	let U;
-	let V;
-	let mTraj;
-	let mGeo;
-	let rainTime_f;
+  let timestamps = [];   // array of input times
+	let latlongs = [];     // array of input points
+	let willRain;          // flag indicating if the trajectory is point at the user location
+	let polyline;          // least squares polyline from manual feature tracker
+  let polyline_m;
+  let polylineModel;     // polyline derived from the 700mb model winds
+	let U;                 // 700mb model U wind
+	let V;                 // 700mb model V wind
+	let mTraj;             // slope of user input trajectory
+	let mGeo;              // slope of trajectory based on 700mb winds.
+	let rainTime_f;        // formatted time of rain arrival
+  let previous_timestamp = -9999;
 
 	// wrap everything in an asyncronous geolocator call
 	getPosition().then((position) => {
@@ -74,7 +81,7 @@
 			const loc_y = position[0];
 
       store.set('overlay','radar')
-            map.setView([loc_y, loc_x], 10 );
+      map.setView([loc_y, loc_x], 10 );
 
       SetText('To begin, first move the slider back in time. Then click on a weather feature.')
 
@@ -95,7 +102,6 @@
 			load('airData', dataOptions ).then( ({data}) => {
 				  let current_timestamp = store.get('timestamp');
           let tidx = getDataTimeStamp(current_timestamp, data.data.hours);
-          // console.log('Using 700hPa winds at timestamp: ',new Date(data.data.hours[tidx]));
           U = data.data['wind_u-700h'][tidx];
           V = data.data['wind_v-700h'][tidx];
 			});
@@ -109,7 +115,10 @@
 			      resetB.addEventListener("click", () => {
 								timestamps = [];
 								latlongs = [];
+                previous_timestamp = -9999;
 								map.removeLayer(polyline);
+								map.removeLayer(polyline_m);
+								map.removeLayer(polylineModel);
 								let elements = document.getElementsByClassName('css-icon');
 								while(elements.length > 0){
 										elements[0].parentNode.removeChild(elements[0]);
@@ -117,19 +126,16 @@
 			      });
 
 
-
-
-
-					  let pulsing_marker = L.marker([e.latlng.lat, e.latlng.lng], {icon: pointIcon}).addTo(map);
 						let timestamp = getTimestamp();
-            console.log(timestamp - timestamps[timestamps.length-1] )
-            if (Math.abs(timestamp - timestamps[timestamps.length-1]) < 120000) {
-                SetText("Did you change the time?");
+            if (Math.abs(timestamp - previous_timestamp) < 120000) {
+                SetText("Did you adjust the time? \u23F0");
             } else if (timestamp.length==1) {
                 SetText("Move forward in time and click on the same feature. Doing this repeatedly should, in general, improve the accuracy. ");
             } else {
 
     						timestamps.push(timestamp);
+                previous_timestamp = timestamp;
+    					  let pulsing_marker = L.marker([e.latlng.lat, e.latlng.lng], {icon: pointIcon}).addTo(map);
 
     						latlongs.push([e.latlng.lat, e.latlng.lng]);
     						let zip = [];
@@ -151,27 +157,32 @@
 
      					  if (lons.length >= 2) {
     							  console.log("Using manual trajectories...");
+    								map.removeLayer(polylineModel);
+
     								let [fitlons, fitlats] = linearFit(lons, lats);
     								let dt = Math.max(...timestamps) - Math.min(...timestamps);
     								let fitlatlons = fitlons.map((e, i) => [fitlats[i], e]);
 
-
-    								if (fitlatlons.length>2) 	map.removeLayer(polyline);
+    								if (fitlatlons.length>2) {
+                      	map.removeLayer(polyline);
+                        map.removeLayer(polyline_m);
+                    }
     								polyline = new L.polyline(fitlatlons, {color: 'red'}).addTo(map);
 
     		 						// // Can't quite get the arrow heads positioned right, will come back to this.
     		            // drawArrowHead(fitlatlons);
 
-    								// fitlons_m contains the location of the user as its last point
     								lats.push(loc_y);
     				        lons.push(loc_x);
-    								let [fitlons_m, fitlats_m] = linearFit(lons, lats);
 
-    								/* find the slope of the best fit line including the users location
-    								and also without. If the difference in slope, m, is smaller than a threshold
+    								polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]],
+                                 {color: 'purple',dashArray: '20, 20', dashOffset: '0'}).addTo(map);
+
+    								/* find the slope of the best fit line including the users location (mGeo)
+    								and also without (mTraj). If the difference in slope, m, is smaller than a threshold
     								value, the user is assumed to be in the rain's path. */
     								mTraj = (fitlats[fitlons.length-1]-fitlats[0])/(fitlons[fitlons.length-1]-fitlons[0]);
-    				        mGeo = (fitlats_m[fitlons.length-1]-fitlats_m[0])/(fitlons_m[fitlons.length-1]-fitlons_m[0]);
+                    mGeo = (lats[0] - loc_y) / (lons[0] - loc_x)
 
     								let lidx = fitlons.length-1;
     								let Velocity = 1/dt* Math.sqrt((fitlats[lidx]-fitlats[0])**2 + (fitlons[lidx]-fitlons[0])**2 );
@@ -189,19 +200,29 @@
     								let d_metres = haversine(loc_y, loc_x, lats[0], lons[0]);
     								let dtNew = 1000*d_metres/Velocity;
 
+                    // gx, gy, qx, qy are for creating a polyline. The line just extends 1/4 of the way
+                    // to the users locations, its just to see the direction of the 700mb winds
+                    let delta_x = (lons[0]-loc_x)/4;
+                    let gy = lats[0] - delta_x*mGeo;
+                    let gx = lons[0] - delta_x;
+                    let delta_y = lats[0] - gy;
+                    let qx = gx + 2*delta_x;
+                    let qy = gy + 2*delta_y;
+    								polylineModel = new L.polyline([[gy,gx],[qy,qx]], {color: 'green'}).addTo(map);
+
     								let rainTime = Math.max(...timestamps) + dtNew;
     								rainTime_f = new Date(rainTime);
     						};
 
-    						if (Math.abs(mTraj - mGeo) < 0.3) willRain = true;
+                // here's where we set the threshold value for difference in slopes
+                willRain = (Math.abs(mTraj - mGeo) < 0.2) ? true : false;
 
+                // Based on whether the trajectory aims for the users loction, display the output
     						if (willRain) {
-    								console.log('Rain ETA: ', rainTime_f);
                     let rainTimeSlice = rainTime_f.toString().slice(16,21);
     								SetText(`Rain ETA: ${rainTimeSlice}` );
     						} else {
-    								console.log('The current trajectory doesn\'t affect your location.');
-    								SetText('The current trajectory doesn\'t affect your location. Move the time slider and add more points to increase the accuracy.');
+    								SetText('The trajectory doesn\'t affect your location so far.\n\n Move the time slider forward and add another point to increase the accuracy.');
     						};
             }; // timestamp ifelse
 		  });  //map.onclick event
@@ -270,11 +291,11 @@
 					}
           timestamp = Date.now() - secondsElapsed;
 			}
-
 			return timestamp;
 	}
 
 
+  // create arrowheads on the polylines
   const drawArrowHead = (fitlatlons) => {
 
 			let fidx = fitlatlons.length-1;
@@ -289,6 +310,7 @@
 			L.marker([fitlatlons[fidx][0], fitlatlons[fidx][1]], {icon: arrowIcon}).addTo(map);
 	};
 
+  // adds text to the navigator with a little animation
 	const SetText = text => {
 		  document.getElementById('comment-box-text').style.opacity = '0';
 			window.setTimeout(function () {
@@ -297,7 +319,7 @@
 			}, 500);
   }
 
-
+  // Aquires the index of the current time within the dataloaders timestamp array
 	const getDataTimeStamp = (current_timestamp, h) => {
 			let i=0;
 			let minDiff = 99999999999;
@@ -312,16 +334,16 @@
 			return tidx;
 	};
 
-
-	function haversine(lat1, lon1, lat2, lon2){  // generally used geo measurement function
-	    var R = 6378.137; // Radius of earth in KM
-	    var dLat = lat2 * Math.PI / 180 - lat1 * Math.PI / 180;
-	    var dLon = lon2 * Math.PI / 180 - lon1 * Math.PI / 180;
-	    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+  // method for calculating distance in meters between two points in lat/lon space (haversince formula)
+	const haversine = (lat1, lon1, lat2, lon2) => {  // generally used geo measurement function
+	    const R = 6378.137; // Radius of earth in KM
+	    let dLat = lat2 * Math.PI / 180 - lat1 * Math.PI / 180;
+	    let dLon = lon2 * Math.PI / 180 - lon1 * Math.PI / 180;
+	    let a = Math.sin(dLat/2) * Math.sin(dLat/2) +
 	    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
 	    Math.sin(dLon/2) * Math.sin(dLon/2);
-	    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-	    var d = R * c;
+	    let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+	    let d = R * c;
 	    return d * 1000; // meters
 	}
 

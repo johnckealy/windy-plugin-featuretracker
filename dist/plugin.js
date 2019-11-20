@@ -35,12 +35,14 @@ W.loadPlugin(
   "hook": "contextmenu"
 },
 /* HTML */
-'<div id="bottom" class="shy left-border right-border radar-wrapper"> <div id="navigator"> <div id="comment-box"> <div id="comment-box-text"></div> </div> <div id="reset-button"> &#8634; Reset </div> </div> </div>',
+'<div id="bottom" class="shy left-border right-border radar-wrapper"> <div id="navigator"> <div id="ft-title"> Feature Tracking </div> <div id="comment-box"> <div id="comment-box-text"></div> </div> <div id="reset-button" class="nav-button"> &#8634; Reset </div> </div> </div>',
 /* CSS */
-'.nav-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;width:60px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}.nav-button:hover{color:white}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 270px);pointer-events:auto}#comment-box{position:relative;width:220px;height:250px;border-radius:12px;background-color:rgba(0,0,0,0.5);border:5px solid black}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}',
+'.nav-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;width:60px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}.nav-button:hover{color:white}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}#ft-title{margin:3px .5px 1px .5px;padding:3px 0px 3px 5px;text-align:left;width:220px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 200px);pointer-events:auto}#comment-box{position:relative;width:220px;height:180px;border-radius:12px;background-color:rgba(0,0,0,0.5)}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}',
 /* Constructor */
 function () {
   var pluginDataLoader = W.require('pluginDataLoader');
+
+  var picker = W.require('picker');
 
   var map = W.require('map');
 
@@ -80,11 +82,14 @@ function () {
   var latlongs = [];
   var willRain;
   var polyline;
+  var polyline_m;
+  var polylineModel;
   var U;
   var V;
   var mTraj;
   var mGeo;
   var rainTime_f;
+  var previous_timestamp = -9999;
   getPosition().then(function (position) {
     var loc_x = position[1];
     var loc_y = position[0];
@@ -117,25 +122,28 @@ function () {
       resetB.addEventListener("click", function () {
         timestamps = [];
         latlongs = [];
+        previous_timestamp = -9999;
         map.removeLayer(polyline);
+        map.removeLayer(polyline_m);
+        map.removeLayer(polylineModel);
         var elements = document.getElementsByClassName('css-icon');
 
         while (elements.length > 0) {
           elements[0].parentNode.removeChild(elements[0]);
         }
       });
-      var pulsing_marker = L.marker([e.latlng.lat, e.latlng.lng], {
-        icon: pointIcon
-      }).addTo(map);
       var timestamp = getTimestamp();
-      console.log(timestamp - timestamps[timestamps.length - 1]);
 
-      if (Math.abs(timestamp - timestamps[timestamps.length - 1]) < 120000) {
-        SetText("Did you change the time?");
+      if (Math.abs(timestamp - previous_timestamp) < 120000) {
+        SetText("Did you adjust the time? \u23F0");
       } else if (timestamp.length == 1) {
         SetText("Move forward in time and click on the same feature. Doing this repeatedly should, in general, improve the accuracy. ");
       } else {
         timestamps.push(timestamp);
+        previous_timestamp = timestamp;
+        var pulsing_marker = L.marker([e.latlng.lat, e.latlng.lng], {
+          icon: pointIcon
+        }).addTo(map);
         latlongs.push([e.latlng.lat, e.latlng.lng]);
         var zip = [];
 
@@ -162,6 +170,7 @@ function () {
 
         if (lons.length >= 2) {
           console.log("Using manual trajectories...");
+          map.removeLayer(polylineModel);
 
           var _linearFit = linearFit(lons, lats),
               _linearFit2 = _slicedToArray(_linearFit, 2),
@@ -172,20 +181,24 @@ function () {
           var fitlatlons = fitlons.map(function (e, i) {
             return [fitlats[i], e];
           });
-          if (fitlatlons.length > 2) map.removeLayer(polyline);
+
+          if (fitlatlons.length > 2) {
+            map.removeLayer(polyline);
+            map.removeLayer(polyline_m);
+          }
+
           polyline = new L.polyline(fitlatlons, {
             color: 'red'
           }).addTo(map);
           lats.push(loc_y);
           lons.push(loc_x);
-
-          var _linearFit3 = linearFit(lons, lats),
-              _linearFit4 = _slicedToArray(_linearFit3, 2),
-              fitlons_m = _linearFit4[0],
-              fitlats_m = _linearFit4[1];
-
+          polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]], {
+            color: 'purple',
+            dashArray: '20, 20',
+            dashOffset: '0'
+          }).addTo(map);
           mTraj = (fitlats[fitlons.length - 1] - fitlats[0]) / (fitlons[fitlons.length - 1] - fitlons[0]);
-          mGeo = (fitlats_m[fitlons.length - 1] - fitlats_m[0]) / (fitlons_m[fitlons.length - 1] - fitlons_m[0]);
+          mGeo = (lats[0] - loc_y) / (lons[0] - loc_x);
           var lidx = fitlons.length - 1;
           var Velocity = 1 / dt * Math.sqrt(Math.pow(fitlats[lidx] - fitlats[0], 2) + Math.pow(fitlons[lidx] - fitlons[0], 2));
           var dtNew = Math.sqrt(Math.pow(loc_y - fitlats[lidx], 2) + Math.pow(loc_x - fitlons[lidx], 2)) / Velocity;
@@ -202,21 +215,29 @@ function () {
 
           var _dtNew = 1000 * d_metres / _Velocity;
 
+          var delta_x = (lons[0] - loc_x) / 4;
+          var gy = lats[0] - delta_x * mGeo;
+          var gx = lons[0] - delta_x;
+          var delta_y = lats[0] - gy;
+          var qx = gx + 2 * delta_x;
+          var qy = gy + 2 * delta_y;
+          polylineModel = new L.polyline([[gy, gx], [qy, qx]], {
+            color: 'green'
+          }).addTo(map);
+
           var _rainTime = Math.max.apply(Math, _toConsumableArray(timestamps)) + _dtNew;
 
           rainTime_f = new Date(_rainTime);
         }
 
         ;
-        if (Math.abs(mTraj - mGeo) < 0.3) willRain = true;
+        willRain = Math.abs(mTraj - mGeo) < 0.2 ? true : false;
 
         if (willRain) {
-          console.log('Rain ETA: ', rainTime_f);
           var rainTimeSlice = rainTime_f.toString().slice(16, 21);
           SetText("Rain ETA: ".concat(rainTimeSlice));
         } else {
-          console.log('The current trajectory doesn\'t affect your location.');
-          SetText('The current trajectory doesn\'t affect your location. Move the time slider and add more points to increase the accuracy.');
+          SetText('The trajectory doesn\'t affect your location so far.\n\n Move the time slider forward and add another point to increase the accuracy.');
         }
 
         ;
@@ -343,7 +364,7 @@ function () {
     return tidx;
   };
 
-  function haversine(lat1, lon1, lat2, lon2) {
+  var haversine = function haversine(lat1, lon1, lat2, lon2) {
     var R = 6378.137;
     var dLat = lat2 * Math.PI / 180 - lat1 * Math.PI / 180;
     var dLon = lon2 * Math.PI / 180 - lon1 * Math.PI / 180;
@@ -351,5 +372,5 @@ function () {
     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     var d = R * c;
     return d * 1000;
-  }
+  };
 });
