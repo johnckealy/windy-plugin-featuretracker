@@ -1,23 +1,23 @@
 
 @import 'dev/variables.less';
-
+@import url('https://fonts.googleapis.com/css?family=Courgette&display=swap');
 
 
 .nav-button {
-    margin: 3px .5px 1px .5px;
-    padding: 3px 0px 3px 0px;
-    text-align: center;
-    width: 60px;
-    border-radius: 7px;
-    display: inline-block;
-    background-color: rgba(0,0,0,0.5);
-    color: #E8E8E8;
+  margin: 3px .5px 1px .5px;
+  padding: 3px 0px 3px 0px;
+  text-align: center;
+  height: 100%;
+  width: 80px;
+  border-radius: 7px;
+  display: inline-block;
+  background-color: rgba(0,0,0,0.5);
+  color: #E8E8E8;
 }
 
 .nav-button:hover {
   color: white;
 }
-
 
 .gps_ring {
   border: 5px solid 	#8B0000;
@@ -28,16 +28,14 @@
   -webkit-animation-iteration-count: infinite;
 }
 
-
 .arrow-icon {
   font-size: 50px;
   color: red;
   transform-origin: bottom center;
 }
 
-
-
 #ft-title{
+  font-family: 'Courgette', cursive;
   margin: 3px .5px 1px .5px;
   padding: 3px 0px 3px 5px;
   text-align: left;
@@ -45,26 +43,24 @@
   border-radius: 7px;
   display: inline-block;
   background-color: rgba(0,0,0,0.5);
-  color: #E8E8E8;
+  color: #FFFF00;
 }
-
 
 #navigator {
     position: absolute;
     margin-left: 50px;
-    bottom: calc(100vh - 200px);
+    bottom: calc(100vh - 160px);
     pointer-events: auto;
 }
 
 #comment-box {
     position: relative;
     width: 220px;
-    height: 180px;
+    height: 150px;
     border-radius: 12px;
     background-color: rgba(0,0,0,0.5);
     // border: 5px solid black;
 }
-
 
 #comment-box-text {
   transition: 0.5s opacity;
@@ -72,4 +68,21 @@
   height: 100px;
   font-size: 16px;
   padding: 5px;
+}
+
+#rain-time {
+  position: absolute;
+  top: 90px;
+  left: 70px;
+  font-size: 26px;
+  font-family: serif;
+}
+
+#tracks {
+  width: 120px;
+}
+
+#tracks-cb {
+    height: 15px;
+    width: 15px;
 }

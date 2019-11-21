@@ -35,12 +35,14 @@ W.loadPlugin(
   "hook": "contextmenu"
 },
 /* HTML */
-'<div id="bottom" class="shy left-border right-border radar-wrapper"> <div id="navigator"> <div id="ft-title"> Feature Tracking </div> <div id="comment-box"> <div id="comment-box-text"></div> </div> <div id="reset-button" class="nav-button"> &#8634; Reset </div> </div> </div>',
+'<div id="bottom" class="shy left-border right-border radar-wrapper"> <div id="navigator"> <div id="ft-title"> Feature Tracker </div> <div id="comment-box"> <div id="comment-box-text"></div> </div> <div id="reset-button" class="nav-button"> &#8634; Reset </div> <div id="rain-time"></div> <div id="tracks" class="nav-button"> <input id="tracks-cb" class="checkboxs" type="checkbox" name="tracks-cb" value="show" checked> <label for="tracks-cb">Show Tracks</label> </div> </div> </div>',
 /* CSS */
-'.nav-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;width:60px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}.nav-button:hover{color:white}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}#ft-title{margin:3px .5px 1px .5px;padding:3px 0px 3px 5px;text-align:left;width:220px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 200px);pointer-events:auto}#comment-box{position:relative;width:220px;height:180px;border-radius:12px;background-color:rgba(0,0,0,0.5)}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}',
+'@font-face{font-family:\'Courgette\';font-style:normal;font-weight:400;font-display:swap;src:local(\'Courgette Regular\'),local(\'Courgette-Regular\'),url(https://fonts.gstatic.com/s/courgette/v7/wEO_EBrAnc9BLjLQAUk1VvoP.ttf) format(\'truetype\')}.nav-button{margin:3px .5px 1px .5px;padding:3px 0px 3px 0px;text-align:center;height:100%;width:80px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#E8E8E8}.nav-button:hover{color:white}.gps_ring{border:5px solid #8B0000;-webkit-border-radius:100%;height:27px;width:27px;-webkit-animation:pulsate 2s ease-out;-webkit-animation-iteration-count:infinite}.arrow-icon{font-size:50px;color:red;transform-origin:bottom center}#ft-title{font-family:\'Courgette\',cursive;margin:3px .5px 1px .5px;padding:3px 0px 3px 5px;text-align:left;width:220px;border-radius:7px;display:inline-block;background-color:rgba(0,0,0,0.5);color:#FFFF00}#navigator{position:absolute;margin-left:50px;bottom:calc(100vh - 160px);pointer-events:auto}#comment-box{position:relative;width:220px;height:150px;border-radius:12px;background-color:rgba(0,0,0,0.5)}#comment-box-text{transition:.5s opacity;width:220px;height:100px;font-size:16px;padding:5px}#rain-time{position:absolute;top:90px;left:70px;font-size:26px;font-family:serif}#tracks{width:120px}#tracks-cb{height:15px;width:15px}',
 /* Constructor */
 function () {
   var pluginDataLoader = W.require('pluginDataLoader');
+
+  var broadcast = W.require('broadcast');
 
   var picker = W.require('picker');
 
@@ -80,7 +82,10 @@ function () {
   });
   var timestamps = [];
   var latlongs = [];
+  var fitlatlons;
   var willRain;
+  var lats = [];
+  var lons = [];
   var polyline;
   var polyline_m;
   var polylineModel;
@@ -90,12 +95,14 @@ function () {
   var mGeo;
   var rainTime_f;
   var previous_timestamp = -9999;
+  var cbTracks = document.getElementById('tracks-cb');
+  var rainTimeDIV = document.getElementById('rain-time');
   getPosition().then(function (position) {
     var loc_x = position[1];
     var loc_y = position[0];
     store.set('overlay', 'radar');
     map.setView([loc_y, loc_x], 10);
-    SetText('To begin, first move the slider back in time. Then click on a weather feature.');
+    SetText('To begin, first move the slider back in time. \n\nThen, click on a weather feature.');
     var location_marker = L.marker([loc_y, loc_x], {
       icon: locationIcon
     }).addTo(map);
@@ -118,19 +125,8 @@ function () {
       V = data.data['wind_v-700h'][tidx];
     });
     map.on('click', function (e) {
-      var resetB = document.getElementById('reset-button');
-      resetB.addEventListener("click", function () {
-        timestamps = [];
-        latlongs = [];
-        previous_timestamp = -9999;
-        map.removeLayer(polyline);
-        map.removeLayer(polyline_m);
-        map.removeLayer(polylineModel);
-        var elements = document.getElementsByClassName('css-icon');
-
-        while (elements.length > 0) {
-          elements[0].parentNode.removeChild(elements[0]);
-        }
+      picker.on('pickerOpened', function (latLon) {
+        broadcast.fire('rqstClose', 'picker');
       });
       var timestamp = getTimestamp();
 
@@ -160,9 +156,6 @@ function () {
           latlongs[_i] = zip[_i][1];
         }
 
-        var lats = [];
-        var lons = [];
-
         for (var _i2 = 0; _i2 < latlongs.length; _i2++) {
           lats.push(latlongs[_i2][0]);
           lons.push(latlongs[_i2][1]);
@@ -170,7 +163,7 @@ function () {
 
         if (lons.length >= 2) {
           console.log("Using manual trajectories...");
-          map.removeLayer(polylineModel);
+          if (polylineModel) map.removeLayer(polylineModel);
 
           var _linearFit = linearFit(lons, lats),
               _linearFit2 = _slicedToArray(_linearFit, 2),
@@ -178,25 +171,29 @@ function () {
               fitlats = _linearFit2[1];
 
           var dt = Math.max.apply(Math, _toConsumableArray(timestamps)) - Math.min.apply(Math, _toConsumableArray(timestamps));
-          var fitlatlons = fitlons.map(function (e, i) {
+          fitlatlons = fitlons.map(function (e, i) {
             return [fitlats[i], e];
           });
 
           if (fitlatlons.length > 2) {
-            map.removeLayer(polyline);
-            map.removeLayer(polyline_m);
+            if (polyline) map.removeLayer(polyline);
+            if (polyline_m) map.removeLayer(polyline_m);
           }
 
-          polyline = new L.polyline(fitlatlons, {
+          if (cbTracks.checked) polyline = new L.polyline(fitlatlons, {
             color: 'red'
           }).addTo(map);
           lats.push(loc_y);
           lons.push(loc_x);
-          polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]], {
-            color: 'purple',
-            dashArray: '20, 20',
-            dashOffset: '0'
-          }).addTo(map);
+
+          if (cbTracks.checked) {
+            polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]], {
+              color: 'purple',
+              dashArray: '20, 20',
+              dashOffset: '0'
+            }).addTo(map);
+          }
+
           mTraj = (fitlats[fitlons.length - 1] - fitlats[0]) / (fitlons[fitlons.length - 1] - fitlons[0]);
           mGeo = (lats[0] - loc_y) / (lons[0] - loc_x);
           var lidx = fitlons.length - 1;
@@ -215,13 +212,13 @@ function () {
 
           var _dtNew = 1000 * d_metres / _Velocity;
 
-          var delta_x = (lons[0] - loc_x) / 4;
+          var delta_x = (lons[0] - loc_x) / 12;
           var gy = lats[0] - delta_x * mGeo;
           var gx = lons[0] - delta_x;
           var delta_y = lats[0] - gy;
           var qx = gx + 2 * delta_x;
           var qy = gy + 2 * delta_y;
-          polylineModel = new L.polyline([[gy, gx], [qy, qx]], {
+          if (cbTracks.checked) polylineModel = new L.polyline([[gy, gx], [qy, qx]], {
             color: 'green'
           }).addTo(map);
 
@@ -231,11 +228,14 @@ function () {
         }
 
         ;
-        willRain = Math.abs(mTraj - mGeo) < 0.2 ? true : false;
+        var d = haversine(lats[0], lons[0], loc_y, loc_x);
+        var adjusted_slope = 0.2 * (17000 / d);
+        willRain = Math.abs(mTraj - mGeo) < adjusted_slope ? true : false;
 
         if (willRain) {
           var rainTimeSlice = rainTime_f.toString().slice(16, 21);
-          SetText("Rain ETA: ".concat(rainTimeSlice));
+          SetText("This feature is due to arrive at");
+          SetRainTime(rainTimeSlice);
         } else {
           SetText('The trajectory doesn\'t affect your location so far.\n\n Move the time slider forward and add another point to increase the accuracy.');
         }
@@ -244,6 +244,44 @@ function () {
       }
 
       ;
+    });
+    cbTracks.addEventListener("click", function () {
+      if (!cbTracks.checked) {
+        if (polyline) map.removeLayer(polyline);
+        if (polyline_m) map.removeLayer(polyline_m);
+        if (polylineModel) map.removeLayer(polylineModel);
+      } else {
+        if (fitlatlons && lats.length != 0) {
+          polyline = new L.polyline(fitlatlons, {
+            color: 'red'
+          }).addTo(map);
+          polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]], {
+            color: 'purple',
+            dashArray: '20, 20',
+            dashOffset: '0'
+          }).addTo(map);
+        }
+      }
+    });
+    var resetB = document.getElementById('reset-button');
+    resetB.addEventListener("click", function () {
+      timestamps = [];
+      fitlatlons = null;
+      latlongs = [];
+      lats = [];
+      lons = [];
+      previous_timestamp = -9999;
+      if (polyline) map.removeLayer(polyline);
+      if (polyline_m) map.removeLayer(polyline_m);
+      if (polylineModel) map.removeLayer(polylineModel);
+      var elements = document.getElementsByClassName('css-icon');
+
+      while (elements.length > 0) {
+        elements[0].parentNode.removeChild(elements[0]);
+      }
+
+      SetText('To begin, first move the slider back in time. \n\nThen, click on a weather feature.');
+      rainTimeDIV.innerHTML = "";
     });
   });
 
@@ -297,11 +335,18 @@ function () {
   var getTimestamp = function getTimestamp() {
     var timestamp;
     var secondsElapsed;
+    var idx;
 
     if (document.querySelectorAll("div.timecode.main-timecode").length < 3) {
       timestamp = store.get('timestamp');
     } else {
-      var radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[2].innerText;
+      if (store.get('overlay') == 'radar') {
+        idx = 2;
+      } else {
+        var _idx = 3;
+      }
+
+      var radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[idx].textContent;
       var r = /\d+/g;
       var regextimes = [];
       var m;
@@ -314,6 +359,8 @@ function () {
         secondsElapsed = 1000 * (60 * 60 * regextimes[2] + 60 * regextimes[3]);
       } else if (regextimes.length == 3) {
         secondsElapsed = 1000 * 60 * regextimes[2];
+      } else {
+        console.log('There\'s an issue with the regex timestamp');
       }
 
       timestamp = Date.now() - secondsElapsed;
@@ -337,9 +384,10 @@ function () {
   };
 
   var SetText = function SetText(text) {
+    rainTimeDIV.innerHTML = "";
     document.getElementById('comment-box-text').style.opacity = '0';
     window.setTimeout(function () {
-      document.getElementById('comment-box-text').innerText = text;
+      document.getElementById('comment-box-text').textContent = text;
       document.getElementById('comment-box-text').style.opacity = '1';
     }, 500);
   };
@@ -372,5 +420,9 @@ function () {
     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     var d = R * c;
     return d * 1000;
+  };
+
+  var SetRainTime = function SetRainTime(rainTimeSlice) {
+    rainTimeDIV.innerHTML = rainTimeSlice;
   };
 });

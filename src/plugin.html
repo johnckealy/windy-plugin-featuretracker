@@ -4,7 +4,7 @@
   <div id="bottom" class="shy left-border right-border radar-wrapper">
     <div id="navigator">
       <div id="ft-title">
-        Feature Tracking
+        Feature Tracker
       </div>
 
       <div id="comment-box">
@@ -14,6 +14,14 @@
       <div id="reset-button" class="nav-button">
         &#8634; Reset
       </div>
+
+      <div id="rain-time"></div>
+
+      <div id="tracks" class="nav-button">
+        <input id="tracks-cb" class="checkboxs" type="checkbox" name="tracks-cb" value="show" checked>
+        <label for="tracks-cb">Show Tracks</label>
+      </div>
+
     </div>
   </div>
 
@@ -24,8 +32,10 @@
 	import store from '@windy/store'
 	import map from '@windy/map'
   import picker from '@windy/picker'
+  import broadcast from '@windy/broadcast'
   // import utils from '@windy/utils'
   import pluginDataLoader from '@windy/pluginDataLoader'
+
 
 
 	const getPosition = () => {
@@ -62,9 +72,12 @@
 
   let timestamps = [];   // array of input times
 	let latlongs = [];     // array of input points
+  let fitlatlons;
 	let willRain;          // flag indicating if the trajectory is point at the user location
+  let lats = [];
+  let lons = [];
 	let polyline;          // least squares polyline from manual feature tracker
-  let polyline_m;
+  let polyline_m;        // polyline between the earliest user input location and the user location
   let polylineModel;     // polyline derived from the 700mb model winds
 	let U;                 // 700mb model U wind
 	let V;                 // 700mb model V wind
@@ -72,9 +85,14 @@
 	let mGeo;              // slope of trajectory based on 700mb winds.
 	let rainTime_f;        // formatted time of rain arrival
   let previous_timestamp = -9999;
+  let cbTracks = document.getElementById('tracks-cb')
+  let rainTimeDIV = document.getElementById('rain-time')
+
+
 
 	// wrap everything in an asyncronous geolocator call
 	getPosition().then((position) => {
+
 
 			// sample user location
 			const loc_x = position[1];
@@ -83,7 +101,7 @@
       store.set('overlay','radar')
       map.setView([loc_y, loc_x], 10 );
 
-      SetText('To begin, first move the slider back in time. Then click on a weather feature.')
+      SetText('To begin, first move the slider back in time. \n\nThen, click on a weather feature.')
 
 
 			let location_marker = L.marker([loc_y, loc_x], {icon: locationIcon}).addTo(map);
@@ -111,22 +129,12 @@
       // This is the main code, triggered by the first click event
 		  map.on('click', e => {
 
-						let resetB = document.getElementById('reset-button')
-			      resetB.addEventListener("click", () => {
-								timestamps = [];
-								latlongs = [];
-                previous_timestamp = -9999;
-								map.removeLayer(polyline);
-								map.removeLayer(polyline_m);
-								map.removeLayer(polylineModel);
-								let elements = document.getElementsByClassName('css-icon');
-								while(elements.length > 0){
-										elements[0].parentNode.removeChild(elements[0]);
-								}
-			      });
-
+            picker.on('pickerOpened', latLon => {
+       		     broadcast.fire('rqstClose', 'picker');
+       		  })
 
 						let timestamp = getTimestamp();
+
             if (Math.abs(timestamp - previous_timestamp) < 120000) {
                 SetText("Did you adjust the time? \u23F0");
             } else if (timestamp.length==1) {
@@ -148,8 +156,6 @@
     								latlongs[i] = zip[i][1];
     						}
 
-    		        let lats = [];
-    						let lons = [];
     						for (let i=0;i<latlongs.length;i++) {
     		            lats.push(latlongs[i][0]);
     				        lons.push(latlongs[i][1]);
@@ -157,26 +163,27 @@
 
      					  if (lons.length >= 2) {
     							  console.log("Using manual trajectories...");
-    								map.removeLayer(polylineModel);
+    							  if (polylineModel) map.removeLayer(polylineModel);
 
     								let [fitlons, fitlats] = linearFit(lons, lats);
     								let dt = Math.max(...timestamps) - Math.min(...timestamps);
-    								let fitlatlons = fitlons.map((e, i) => [fitlats[i], e]);
+    								fitlatlons = fitlons.map((e, i) => [fitlats[i], e]);
 
     								if (fitlatlons.length>2) {
-                      	map.removeLayer(polyline);
-                        map.removeLayer(polyline_m);
+                          if (polyline) map.removeLayer(polyline);
+                          if (polyline_m) map.removeLayer(polyline_m);
                     }
-    								polyline = new L.polyline(fitlatlons, {color: 'red'}).addTo(map);
-
+                    if (cbTracks.checked) polyline = new L.polyline(fitlatlons, {color: 'red'}).addTo(map);
     		 						// // Can't quite get the arrow heads positioned right, will come back to this.
     		            // drawArrowHead(fitlatlons);
 
     								lats.push(loc_y);
     				        lons.push(loc_x);
 
-    								polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]],
-                                 {color: 'purple',dashArray: '20, 20', dashOffset: '0'}).addTo(map);
+                    if (cbTracks.checked) {
+      								polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]],
+                                   {color: 'purple',dashArray: '20, 20', dashOffset: '0'}).addTo(map);
+                    }
 
     								/* find the slope of the best fit line including the users location (mGeo)
     								and also without (mTraj). If the difference in slope, m, is smaller than a threshold
@@ -202,31 +209,72 @@
 
                     // gx, gy, qx, qy are for creating a polyline. The line just extends 1/4 of the way
                     // to the users locations, its just to see the direction of the 700mb winds
-                    let delta_x = (lons[0]-loc_x)/4;
+                    let delta_x = (lons[0]-loc_x)/12;
                     let gy = lats[0] - delta_x*mGeo;
                     let gx = lons[0] - delta_x;
                     let delta_y = lats[0] - gy;
                     let qx = gx + 2*delta_x;
                     let qy = gy + 2*delta_y;
-    								polylineModel = new L.polyline([[gy,gx],[qy,qx]], {color: 'green'}).addTo(map);
+                    if (cbTracks.checked) polylineModel = new L.polyline([[gy,gx],[qy,qx]], {color: 'green'}).addTo(map);
 
     								let rainTime = Math.max(...timestamps) + dtNew;
     								rainTime_f = new Date(rainTime);
     						};
 
                 // here's where we set the threshold value for difference in slopes
-                willRain = (Math.abs(mTraj - mGeo) < 0.2) ? true : false;
+                let d = haversine(lats[0], lons[0], loc_y, loc_x)
+                let adjusted_slope = 0.2*(17000/d)
+                willRain = (Math.abs(mTraj - mGeo) < adjusted_slope) ? true : false;
 
                 // Based on whether the trajectory aims for the users loction, display the output
     						if (willRain) {
                     let rainTimeSlice = rainTime_f.toString().slice(16,21);
-    								SetText(`Rain ETA: ${rainTimeSlice}` );
+    								SetText(`This feature is due to arrive at` );
+                    SetRainTime(rainTimeSlice);
     						} else {
     								SetText('The trajectory doesn\'t affect your location so far.\n\n Move the time slider forward and add another point to increase the accuracy.');
     						};
+
+
             }; // timestamp ifelse
 		  });  //map.onclick event
-	});  // getPosition wrapper
+
+      // checkbox
+      cbTracks.addEventListener("click", () => {
+          if (!cbTracks.checked) {
+              if (polyline) map.removeLayer(polyline);
+              if (polyline_m) map.removeLayer(polyline_m);
+              if (polylineModel) map.removeLayer(polylineModel);
+          } else {
+              if (fitlatlons && lats.length!=0) {
+                  polyline = new L.polyline(fitlatlons, {color: 'red'}).addTo(map);
+                  polyline_m = new L.polyline([[lats[0], lons[0]], [loc_y, loc_x]],
+                               {color: 'purple',dashArray: '20, 20', dashOffset: '0'}).addTo(map);
+              }
+          }
+      });
+
+
+			let resetB = document.getElementById('reset-button')
+      resetB.addEventListener("click", () => {
+					timestamps = [];
+          fitlatlons = null;
+					latlongs = [];
+          lats = [];
+          lons = [];
+          previous_timestamp = -9999;
+          if (polyline) map.removeLayer(polyline);
+          if (polyline_m) map.removeLayer(polyline_m);
+          if (polylineModel) map.removeLayer(polylineModel);
+					let elements = document.getElementsByClassName('css-icon');
+					while(elements.length > 0){
+							elements[0].parentNode.removeChild(elements[0]);
+					}
+          SetText('To begin, first move the slider back in time. \n\nThen, click on a weather feature.')
+          rainTimeDIV.innerHTML = "";
+      });
+
+	});  // getPosition() wrapper
 
 
 
@@ -269,15 +317,20 @@
 
 	// This one's a little hacky, but windy's API only seems to
 	// serve the model timestamps, not the radar. So I hunted through the DOM
-	// for the right div, and grabbed the HTML. The plugin will break if this changes its name.
+	// for the right div, and grabbed the innerHTML. The plugin will break if this changes its name.
   const getTimestamp = () => {
 			let timestamp;
 			let secondsElapsed;
-
+      let idx;
 			if (document.querySelectorAll("div.timecode.main-timecode").length < 3) {
 					timestamp = store.get('timestamp');
 			} else {
-          let radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[2].innerText;
+          if (store.get('overlay') == 'radar') {
+              idx = 2;  // array element for the inner text containing the radar timestamp
+          } else {let
+              idx = 3;
+          }
+          let radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[idx].textContent;
 					let r = /\d+/g;
 					let regextimes = [];
 					let m;
@@ -288,7 +341,9 @@
 						  secondsElapsed = 1000 * (60*60*regextimes[2] + 60*regextimes[3]);
 					} else if (regextimes.length == 3) {
 						  secondsElapsed = 1000 * 60*regextimes[2];
-					}
+					} else {
+              console.log('There\'s an issue with the regex timestamp');
+          }
           timestamp = Date.now() - secondsElapsed;
 			}
 			return timestamp;
@@ -312,9 +367,10 @@
 
   // adds text to the navigator with a little animation
 	const SetText = text => {
+      rainTimeDIV.innerHTML = "";
 		  document.getElementById('comment-box-text').style.opacity = '0';
 			window.setTimeout(function () {
-				  document.getElementById('comment-box-text').innerText = text;
+				  document.getElementById('comment-box-text').textContent = text;
 				  document.getElementById('comment-box-text').style.opacity = '1';
 			}, 500);
   }
@@ -334,6 +390,7 @@
 			return tidx;
 	};
 
+
   // method for calculating distance in meters between two points in lat/lon space (haversince formula)
 	const haversine = (lat1, lon1, lat2, lon2) => {  // generally used geo measurement function
 	    const R = 6378.137; // Radius of earth in KM
@@ -347,6 +404,9 @@
 	    return d * 1000; // meters
 	}
 
+   const SetRainTime = rainTimeSlice => {
+        rainTimeDIV.innerHTML = rainTimeSlice;
+   }
 
 	</script>
 </plugin>
