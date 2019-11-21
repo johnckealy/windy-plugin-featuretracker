@@ -7,7 +7,7 @@
         "start": "node ./compiler.js --build --watch --prompt --serve --transpile",
         "start-dev": "node ./compiler.js --build --watch --serve --transpile",
         "prepublishOnly": "node ./test/prepublish.js",
-        "test": "node ./test/test_featuretracker.js"
+        "test": "node ./test/prepublish.js"
     },
     "repository": {
         "type": "git",

@@ -33,7 +33,7 @@ A magenta line will also appear, this is joins the first entered point to the us
 Reset the map at any time by clicking the "Reset" button, and hide/show the polylines with the "Show Track" checkbox.
 
 
-#### Other notes
+### Other notes
 
 Some Windy functionality will close the feature-tracker's dialogue box (e.g. this happens when a spot forecast is opened). If this happens, simply right click the map and reselect the plugin.  
 

@@ -28,7 +28,6 @@
 
 	<script>
 
-
 	import store from '@windy/store'
 	import map from '@windy/map'
   import picker from '@windy/picker'
@@ -223,7 +222,7 @@
 
                 // here's where we set the threshold value for difference in slopes
                 let d = haversine(lats[0], lons[0], loc_y, loc_x)
-                let adjusted_slope = 0.2*(17000/d)
+                let adjusted_slope = 0.4*(17000/d)
                 willRain = (Math.abs(mTraj - mGeo) < adjusted_slope) ? true : false;
 
                 // Based on whether the trajectory aims for the users loction, display the output
@@ -327,7 +326,7 @@
 			} else {
           if (store.get('overlay') == 'radar') {
               idx = 2;  // array element for the inner text containing the radar timestamp
-          } else {let
+          } else {
               idx = 3;
           }
           let radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[idx].textContent;

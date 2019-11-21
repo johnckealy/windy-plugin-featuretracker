@@ -229,7 +229,7 @@ function () {
 
         ;
         var d = haversine(lats[0], lons[0], loc_y, loc_x);
-        var adjusted_slope = 0.2 * (17000 / d);
+        var adjusted_slope = 0.4 * (17000 / d);
         willRain = Math.abs(mTraj - mGeo) < adjusted_slope ? true : false;
 
         if (willRain) {
@@ -343,7 +343,7 @@ function () {
       if (store.get('overlay') == 'radar') {
         idx = 2;
       } else {
-        var _idx = 3;
+        idx = 3;
       }
 
       var radarTimeStamp = document.querySelectorAll("div.timecode.main-timecode")[idx].textContent;
