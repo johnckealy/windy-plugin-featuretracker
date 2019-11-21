@@ -3,7 +3,7 @@
 #### A plugin for Windy.com
 
 
-<p align="center"><img src="featuretracker.gif"></p>
+<p align="center"><img src="feature-tracker.gif"></p>
 
 Written by John C. Kealy, November 2019
 
