@@ -3,9 +3,9 @@
 #### A plugin for Windy.com
 
 
-<p align="center"><img src="https://www.windy.com/img/logo201802/logo-full-windycom-gray-v3.svg"></p>
+<p align="center"><img src="featuretracker.gif"></p>
 
-##### Written by John C. Kealy, November 2019
+Written by John C. Kealy, November 2019
 
 ### Description
 Some weather features are too small in scale to be explicitly modelled by a numerical weather prediction model. One of the most important of these is convective precipitation, since these features can sometimes lead to torrential downpours, lightning, severe turbulence, squalls, and heavy snow. Convective cells form randomly below the grid-scale of the model; the individual cells cannot be predicted, and so only radar and satellite observations in real-time can identify them.
@@ -40,6 +40,6 @@ Some Windy functionality will close the feature-tracker's dialogue box (e.g. thi
 The plugin can be used with the satellite overlay. Please bear in mind that satellites view the atmosphere from above, which means that the upper-level flow will be most apparent. It is not uncommon for the upper-level flow to be travelling in a totally different direction to the lower atmosphere, at a totally different speed.
 
 
+<br>
 
-
-*machine learning may someday change this
+*Machine learning may someday change this.
