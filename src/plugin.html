@@ -134,6 +134,8 @@
 
 						let timestamp = getTimestamp();
 
+            console.log(timestamp, previous_timestamp)
+
             if (Math.abs(timestamp - previous_timestamp) < 120000) {
                 SetText("Did you adjust the time? \u23F0");
             } else if (timestamp.length==1) {

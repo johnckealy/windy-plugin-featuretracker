@@ -10,7 +10,7 @@ Written by John C. Kealy, November 2019
 ### Description
 Some weather features are too small in scale to be explicitly modelled by a numerical weather prediction model. One of the most important of these is convective precipitation, since these features can sometimes lead to torrential downpours, lightning, severe turbulence, squalls, and heavy snow. Convective cells form randomly below the grid-scale of the model; the individual cells cannot be predicted, and so only radar and satellite observations in real-time can identify them.
 
-This plugin is designed to estimate the arrival time of a user-identified weather feature. This process cannot be automated*, and it is important to understand the difference between modelled precipitation (such as that provided by ECMWF) and real time precipitation (as visualized by radar).   
+This plugin is designed to estimate the arrival time of a user-identified weather feature. This process cannot be automated*, and it is important to understand the difference between modelled precipitation (such as that provided by ECMWF) and real time precipitation (as visualized by radar).
 
 
 ### Getting started with windy-plugin-featuretracker
@@ -35,9 +35,12 @@ Reset the map at any time by clicking the "Reset" button, and hide/show the poly
 
 ### Other notes
 
-Some Windy functionality will close the feature-tracker's dialogue box (e.g. this happens when a spot forecast is opened). If this happens, simply right click the map and reselect the plugin.  
+Some Windy functionality will close the feature-tracker's dialogue box (e.g. this happens when a spot forecast is opened). If this happens, simply right click the map and reselect the plugin.
+
+One major limitation of the plugin is that it cannot account for the generation and dissipation of the feature. With convective showers, this is makes a lot of difference. Showers may generate suddenly anywhere at any time, and likewise, a tracked feature may disappear before it arrives. 
 
 The plugin can be used with the satellite overlay. Please bear in mind that satellites view the atmosphere from above, which means that the upper-level flow will be most apparent. It is not uncommon for the upper-level flow to be travelling in a totally different direction to the lower atmosphere, at a totally different speed.
+
 
 
 <br>

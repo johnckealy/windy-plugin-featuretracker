@@ -1,7 +1,7 @@
 {
     "name": "windy-plugin-featuretracker",
     "version": "0.1.0",
-    "description": "A Windy plugin to manually track features, particularly those that are not resolvable by the NWP models.",
+    "description": "A Windy plugin to manually track features, particularly those that are not resolvable by NWP models.",
     "main": "dist/plugin.js",
     "scripts": {
         "start": "node ./compiler.js --build --watch --prompt --serve --transpile",

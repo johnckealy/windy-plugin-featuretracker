@@ -30,7 +30,7 @@ W.loadPlugin(
     "type": "git",
     "url": "git+https://github.com/johnckealy/windy-plugin-featuretracker"
   },
-  "description": "A Windy plugin to manually track features, particularly those that are not resolvable by the NWP models.",
+  "description": "A Windy plugin to manually track features, particularly those that are not resolvable by NWP models.",
   "displayName": "Feature Tracker",
   "hook": "contextmenu"
 },
@@ -129,6 +129,7 @@ function () {
         broadcast.fire('rqstClose', 'picker');
       });
       var timestamp = getTimestamp();
+      console.log(timestamp, previous_timestamp);
 
       if (Math.abs(timestamp - previous_timestamp) < 120000) {
         SetText("Did you adjust the time? \u23F0");
